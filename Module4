@@ -9,69 +9,81 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract ELLGRAXIASCOFFEE is ERC20, Ownable {
+    using SafeERC20 for IERC20;
 
-    mapping(uint256 => uint256) public shopPrices;
+    struct ShopItem {
+        string name;
+        uint256 price;
+    }
+
+    mapping(uint256 => ShopItem) public shopItems;
     mapping(address => mapping(uint256 => uint256)) private _playerInventory;
+    mapping(uint256 => address[]) private _itemPurchasers;
+
+    event TokensMinted(address indexed to, uint256 amount);
+    event TokensBurned(address indexed from, uint256 amount);
+    event ItemPurchased(address indexed buyer, uint256 itemId, uint256 quantity);
 
     constructor() ERC20("Degen", "DGN") Ownable(msg.sender) {
-        shopPrices[1] = 150;  
-        shopPrices[2] = 170;  
-        shopPrices[3] = 50;  
-        shopPrices[4] = 10; 
-        shopPrices[5] = 50;
-        shopPrices[6] = 40;
-        shopPrices[7] = 70;
-        shopPrices[8] = 55;
-        shopPrices[9] = 80;
+        shopItems[1] = ShopItem("macchiato", 160);
+        shopItems[2] = ShopItem("Americano", 150);
+        shopItems[3] = ShopItem("matcha", 160);
+        shopItems[4] = ShopItem("caramel macchiato", 170);
     }
 
-    function mintTokens(address to, uint256 amount) public onlyOwner {
+    function mintTokens(address to, uint256 amount) external onlyOwner {
         _mint(to, amount);
+        emit TokensMinted(to, amount);
     }
 
-    function sendTokens(address to, uint256 amount) public {
-        require(balanceOf(msg.sender) >= amount, "Transfer Failed: You don't have enough balance.");
-        transfer(to, amount);
+    function sendTokens(address to, uint256 amount) external {
+        _transfer(msg.sender, to, amount);
     }
 
-   function showShopItems() external pure returns (string memory) {
-        string memory saleOptions = "The items on sale: {1} Degen NFT (150) {2} Fashionable Degen T-shirt & Hoodie (170) {3} Random IN-GAME Cosmetic Item (30) {4} Degen Sticker Pack (10) {5} Degen Makeup Kit (50) {6} Degen Plush Toy (40) {7} Degen Jewelry Set (70) {8} Degen Perfume (55) {9} Degen Handbag (80)";
-        return saleOptions;
+    function showShopItems() external view returns (string memory) {
+        string memory items;
+        for (uint256 i = 1; i <= 4; i++) { // Adjusted to match the number of items
+            items = string(abi.encodePacked(items, "{", uintToString(i), "} ", shopItems[i].name, " (", uintToString(shopItems[i].price), ") "));
+        }
+        return items;
     }
 
-    function purchaseItem(uint256 item) public {
-        require(shopPrices[item] > 0, "Item is not available.");
-        require(balanceOf(msg.sender) >= shopPrices[item], "Redeem Failed: Insufficient balance.");
-        _transfer(msg.sender, owner(), shopPrices[item]);
-        _playerInventory[msg.sender][item] += 1;
+    function purchaseItem(uint256 itemId) external {
+        require(shopItems[itemId].price > 0, "Item not available.");
+        require(balanceOf(msg.sender) >= shopItems[itemId].price, "Insufficient balance.");
+        
+        _burn(msg.sender, shopItems[itemId].price); // Burn tokens from the buyer
+        _playerInventory[msg.sender][itemId] += 1;
+        _itemPurchasers[itemId].push(msg.sender);
+
+        emit ItemPurchased(msg.sender, itemId, 1);
     }
 
-    function burnTokens(uint256 amount) public {
-        require(balanceOf(msg.sender) >= amount, "Burn Failed: You don't have enough balance.");
+    function burnTokens(uint256 amount) external {
         _burn(msg.sender, amount);
+        emit TokensBurned(msg.sender, amount);
     }
 
     function checkBalance() external view returns (uint256) {
         return balanceOf(msg.sender);
-    }   
+    }
 
     function checkInventory() external view returns (string memory) {
-        return string(
-            abi.encodePacked(
-                "Degen NFT (", uintToString(_playerInventory[msg.sender][1]), 
-                ") Fashionable Degen T-shirt & Hoodie (", uintToString(_playerInventory[msg.sender][2]), 
-                ") Random IN-GAME Cosmetic Item (", uintToString(_playerInventory[msg.sender][3]), 
-                ") Degen Sticker Pack (", uintToString(_playerInventory[msg.sender][4]),
-                ") Degen Makeup Kit (", uintToString(_playerInventory[msg.sender][5]),
-                ") Degen Plush Toy (", uintToString(_playerInventory[msg.sender][6]),
-                ") Degen Jewelry Set (", uintToString(_playerInventory[msg.sender][7]),
-                ") Degen Perfume (", uintToString(_playerInventory[msg.sender][8]),
-                ") Degen Handbag (", uintToString(_playerInventory[msg.sender][9]), ")"
-            )
-        );
+        string memory inventory;
+        for (uint256 i = 1; i <= 4; i++) { // Adjusted to match the number of items
+            if (_playerInventory[msg.sender][i] > 0) {
+                inventory = string(abi.encodePacked(inventory, shopItems[i].name, " (", uintToString(_playerInventory[msg.sender][i]), ") "));
+            }
+        }
+        return inventory;
+    }
+
+    function getItemPurchasers(uint256 itemId) external view returns (address[] memory) {
+        return _itemPurchasers[itemId];
     }
 
     function decimals() public pure override returns (uint8) {
@@ -87,7 +99,7 @@ contract ELLGRAXIASCOFFEE is ERC20, Ownable {
         uint256 i = 0;
         while (v != 0) {
             uint256 remainder = v % 10;
-            v = v / 10;
+            v /= 10;
             reversed[i++] = bytes1(uint8(48 + remainder));
         }
         bytes memory s = new bytes(i); 
