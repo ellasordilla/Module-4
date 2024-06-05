@@ -12,7 +12,7 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract ELLGRAXIASCOFFEE is ERC20, Ownable {
+contract ELLABLACKSMITH is ERC20, Ownable {
     using SafeERC20 for IERC20;
 
     struct ShopItem {
@@ -24,24 +24,26 @@ contract ELLGRAXIASCOFFEE is ERC20, Ownable {
     mapping(address => mapping(uint256 => uint256)) private _playerInventory;
     mapping(uint256 => address[]) private _itemPurchasers;
 
+    address[] private raffleParticipants;
+    uint256 private raffleTicketPrice = 1000;
+    mapping(address => string) private rafflePrizes; // Mapping to track prizes won by participants
+
     event TokensMinted(address indexed to, uint256 amount);
     event TokensBurned(address indexed from, uint256 amount);
     event ItemPurchased(address indexed buyer, uint256 itemId, uint256 quantity);
+    event RaffleEntered(address indexed participant);
+    event RaffleWinner(address indexed winner, string prize);
 
     constructor() ERC20("Degen", "DGN") Ownable(msg.sender) {
-        shopItems[1] = ShopItem("macchiato", 160);
-        shopItems[2] = ShopItem("Americano", 150);
-        shopItems[3] = ShopItem("matcha", 160);
-        shopItems[4] = ShopItem("caramel macchiato", 170);
+        shopItems[1] = ShopItem("Wood Armor", 100);
+        shopItems[2] = ShopItem("Iron Armor", 150);
+        shopItems[3] = ShopItem("Gold Armor", 200);
+        shopItems[4] = ShopItem("Diamond Armor", 300);
     }
 
     function mintTokens(address to, uint256 amount) external onlyOwner {
         _mint(to, amount);
         emit TokensMinted(to, amount);
-    }
-
-    function sendTokens(address to, uint256 amount) external {
-        _transfer(msg.sender, to, amount);
     }
 
     function showShopItems() external view returns (string memory) {
@@ -86,6 +88,52 @@ contract ELLGRAXIASCOFFEE is ERC20, Ownable {
         return _itemPurchasers[itemId];
     }
 
+    function enterRaffle() external {
+        require(balanceOf(msg.sender) >= raffleTicketPrice, "Insufficient balance to enter raffle.");
+        
+        _burn(msg.sender, raffleTicketPrice); // Burn the tokens for the raffle ticket
+        raffleParticipants.push(msg.sender);
+
+        emit RaffleEntered(msg.sender);
+    }
+
+    function drawRaffle() external onlyOwner {
+        require(raffleParticipants.length >= 1, "Not enough participants for a raffle.");
+
+        // Randomly select winners (this is a simplified randomness for example purposes)
+        uint256 winnerIndex1 = random() % raffleParticipants.length;
+        address winner1 = raffleParticipants[winnerIndex1];
+        rafflePrizes[winner1] = "Longsword";
+        emit RaffleWinner(winner1, "Longsword");
+
+        if (raffleParticipants.length > 1) {
+            uint256 winnerIndex2 = random() % raffleParticipants.length;
+            while (winnerIndex2 == winnerIndex1) {
+                winnerIndex2 = random() % raffleParticipants.length;
+            }
+            address winner2 = raffleParticipants[winnerIndex2];
+            rafflePrizes[winner2] = "Broadsword";
+            emit RaffleWinner(winner2, "Broadsword");
+
+            if (raffleParticipants.length > 2) {
+                uint256 winnerIndex3 = random() % raffleParticipants.length;
+                while (winnerIndex3 == winnerIndex1 || winnerIndex3 == winnerIndex2) {
+                    winnerIndex3 = random() % raffleParticipants.length;
+                }
+                address winner3 = raffleParticipants[winnerIndex3];
+                rafflePrizes[winner3] = "Shortsword";
+                emit RaffleWinner(winner3, "Shortsword");
+            }
+        }
+
+        // Clear the raffle participants for the next raffle
+        delete raffleParticipants;
+    }
+
+    function getRafflePrize(address participant) external view returns (string memory) {
+        return rafflePrizes[participant];
+    }
+
     function decimals() public pure override returns (uint8) {
         return 0;
     }
@@ -107,5 +155,10 @@ contract ELLGRAXIASCOFFEE is ERC20, Ownable {
             s[j] = reversed[i - j - 1];
         }
         return string(s);
+    }
+
+    function random() private view returns (uint256) {
+        // This is not a secure random function, for simplicity and example purposes only
+        return uint256(keccak256(abi.encodePacked(block.timestamp, block.prevrandao, msg.sender)));
     }
 }
