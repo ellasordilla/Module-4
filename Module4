@@ -18,6 +18,7 @@ contract ELLABLACKSMITH is ERC20, Ownable {
     struct ShopItem {
         string name;
         uint256 price;
+        uint256 stock;
     }
 
     mapping(uint256 => ShopItem) public shopItems;
@@ -26,7 +27,7 @@ contract ELLABLACKSMITH is ERC20, Ownable {
 
     address[] private raffleParticipants;
     uint256 private raffleTicketPrice = 1000;
-    mapping(address => string) private rafflePrizes; // Mapping to track prizes won by participants
+    mapping(address => string) private rafflePrizes;
 
     event TokensMinted(address indexed to, uint256 amount);
     event TokensBurned(address indexed from, uint256 amount);
@@ -35,10 +36,10 @@ contract ELLABLACKSMITH is ERC20, Ownable {
     event RaffleWinner(address indexed winner, string prize);
 
     constructor() ERC20("Degen", "DGN") Ownable(msg.sender) {
-        shopItems[1] = ShopItem("Wood Armor", 100);
-        shopItems[2] = ShopItem("Iron Armor", 150);
-        shopItems[3] = ShopItem("Gold Armor", 200);
-        shopItems[4] = ShopItem("Diamond Armor", 300);
+        shopItems[1] = ShopItem("Wood Armor", 100, 10);
+        shopItems[2] = ShopItem("Iron Armor", 150, 5);
+        shopItems[3] = ShopItem("Gold Armor", 200, 3);
+        shopItems[4] = ShopItem("Diamond Armor", 300, 2);
     }
 
     function mintTokens(address to, uint256 amount) external onlyOwner {
@@ -48,18 +49,20 @@ contract ELLABLACKSMITH is ERC20, Ownable {
 
     function showShopItems() external view returns (string memory) {
         string memory items;
-        for (uint256 i = 1; i <= 4; i++) { // Adjusted to match the number of items
-            items = string(abi.encodePacked(items, "{", uintToString(i), "} ", shopItems[i].name, " (", uintToString(shopItems[i].price), ") "));
+        for (uint256 i = 1; i <= 4; i++) { 
+            items = string(abi.encodePacked(items, "{", uintToString(i), "} ", shopItems[i].name, " (", uintToString(shopItems[i].price), ") [Stock: ", uintToString(shopItems[i].stock), "] "));
         }
         return items;
     }
 
-    function purchaseItem(uint256 itemId) external {
+    function purchaseArmor(uint256 itemId) external {
         require(shopItems[itemId].price > 0, "Item not available.");
+        require(shopItems[itemId].stock > 0, "Item is out of stock.");
         require(balanceOf(msg.sender) >= shopItems[itemId].price, "Insufficient balance.");
         
-        _burn(msg.sender, shopItems[itemId].price); // Burn tokens from the buyer
+        _burn(msg.sender, shopItems[itemId].price); 
         _playerInventory[msg.sender][itemId] += 1;
+        shopItems[itemId].stock -= 1;
         _itemPurchasers[itemId].push(msg.sender);
 
         emit ItemPurchased(msg.sender, itemId, 1);
@@ -74,24 +77,28 @@ contract ELLABLACKSMITH is ERC20, Ownable {
         return balanceOf(msg.sender);
     }
 
-    function checkInventory() external view returns (string memory) {
+    function checkArmorPurchased() external view returns (string memory) {
         string memory inventory;
-        for (uint256 i = 1; i <= 4; i++) { // Adjusted to match the number of items
+        for (uint256 i = 1; i <= 4; i++) {
             if (_playerInventory[msg.sender][i] > 0) {
-                inventory = string(abi.encodePacked(inventory, shopItems[i].name, " (", uintToString(_playerInventory[msg.sender][i]), ") "));
+                inventory = string(abi.encodePacked(
+                    inventory,
+                    shopItems[i].name,
+                    " (", uintToString(_playerInventory[msg.sender][i]), ") "
+                ));
             }
         }
         return inventory;
     }
 
-    function getItemPurchasers(uint256 itemId) external view returns (address[] memory) {
+    function getArmorPurchased(uint256 itemId) external view returns (address[] memory) {
         return _itemPurchasers[itemId];
     }
 
     function enterRaffle() external {
         require(balanceOf(msg.sender) >= raffleTicketPrice, "Insufficient balance to enter raffle.");
         
-        _burn(msg.sender, raffleTicketPrice); // Burn the tokens for the raffle ticket
+        _burn(msg.sender, raffleTicketPrice); 
         raffleParticipants.push(msg.sender);
 
         emit RaffleEntered(msg.sender);
@@ -100,7 +107,6 @@ contract ELLABLACKSMITH is ERC20, Ownable {
     function drawRaffle() external onlyOwner {
         require(raffleParticipants.length >= 1, "Not enough participants for a raffle.");
 
-        // Randomly select winners (this is a simplified randomness for example purposes)
         uint256 winnerIndex1 = random() % raffleParticipants.length;
         address winner1 = raffleParticipants[winnerIndex1];
         rafflePrizes[winner1] = "Longsword";
@@ -126,7 +132,6 @@ contract ELLABLACKSMITH is ERC20, Ownable {
             }
         }
 
-        // Clear the raffle participants for the next raffle
         delete raffleParticipants;
     }
 
@@ -158,7 +163,6 @@ contract ELLABLACKSMITH is ERC20, Ownable {
     }
 
     function random() private view returns (uint256) {
-        // This is not a secure random function, for simplicity and example purposes only
         return uint256(keccak256(abi.encodePacked(block.timestamp, block.prevrandao, msg.sender)));
     }
 }
